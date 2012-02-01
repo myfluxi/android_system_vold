@@ -166,6 +166,11 @@ int Volume::handleBlockEvent(NetlinkEvent *evt) {
     return -1;
 }
 
+bool Volume::isPrimaryStorage() {
+    const char* externalStorage = getenv("EXTERNAL_STORAGE") ? : "/mnt/sdcard";
+    return !strcmp(getMountpoint(), externalStorage);
+}
+
 void Volume::setState(int state) {
     char msg[255];
     int oldState = mState;
@@ -243,6 +248,15 @@ int Volume::formatVol() {
     sprintf(devicePath, "/dev/block/vold/%d:%d",
             MAJOR(partNode), MINOR(partNode));
 
+#ifdef VOLD_EMMC_SHARES_DEV_MAJOR
+    // If emmc and sdcard share dev major number, vold may pick
+    // incorrectly based on partition nodes alone, formatting
+    // the wrong device. Use device nodes instead.
+    dev_t deviceNodes;
+    getDeviceNodes((dev_t *) &deviceNodes, 1);
+    sprintf(devicePath, "/dev/block/vold/%d:%d", MAJOR(deviceNodes), MINOR(deviceNodes));
+#endif
+
     if (mDebug) {
         SLOGI("Formatting volume %s (%s)", getLabel(), devicePath);
     }
@@ -289,8 +303,7 @@ int Volume::mountVol() {
     dev_t deviceNodes[4];
     int n, i, rc = 0;
     char errmsg[255];
-    const char* externalStorage = getenv("EXTERNAL_STORAGE");
-    bool primaryStorage = externalStorage && !strcmp(getMountpoint(), externalStorage);
+    bool primaryStorage = isPrimaryStorage();
     char decrypt_state[PROPERTY_VALUE_MAX];
     char crypto_state[PROPERTY_VALUE_MAX];
     char encrypt_progress[PROPERTY_VALUE_MAX];
@@ -413,14 +426,10 @@ int Volume::mountVol() {
         errno = 0;
         int gid;
 
-        if (primaryStorage) {
-            // Special case the primary SD card.
-            // For this we grant write access to the SDCARD_RW group.
-            gid = AID_SDCARD_RW;
-        } else {
-            // For secondary external storage we keep things locked up.
-            gid = AID_MEDIA_RW;
-        }
+        // Originally, non-primary storage was set to MEDIA_RW group which
+        // prevented users from writing to it. We don't want that.
+        gid = AID_SDCARD_RW;
+
         if (Fat::doMount(devicePath, "/mnt/secure/staging", false, false, false,
                 AID_SYSTEM, gid, 0702, true)) {
             SLOGE("%s failed to mount via VFAT (%s)\n", devicePath, strerror(errno));
@@ -593,6 +602,7 @@ int Volume::doUnmount(const char *path, bool force) {
 
 int Volume::unmountVol(bool force, bool revert) {
     int i, rc;
+    const char* externalStorage = getenv("EXTERNAL_STORAGE");
 
     if (getState() != Volume::State_Mounted) {
         SLOGE("Volume %s unmount request when not mounted", getLabel());
@@ -615,24 +625,27 @@ int Volume::unmountVol(bool force, bool revert) {
 
     protectFromAutorunStupidity();
 
-    /*
-     * Unmount the tmpfs which was obscuring the asec image directory
-     * from non root users
-     */
+    /* Undo createBindMounts(), which is only called for primary storage */
+    if (isPrimaryStorage()) {
+        /*
+         * Unmount the tmpfs which was obscuring the asec image directory
+         * from non root users
+         */
 
-    if (doUnmount(Volume::SEC_STG_SECIMGDIR, force)) {
-        SLOGE("Failed to unmount tmpfs on %s (%s)", SEC_STG_SECIMGDIR, strerror(errno));
-        goto fail_republish;
-    }
+        if (doUnmount(Volume::SEC_STG_SECIMGDIR, force)) {
+            SLOGE("Failed to unmount tmpfs on %s (%s)", SEC_STG_SECIMGDIR, strerror(errno));
+            goto fail_republish;
+        }
 
-    /*
-     * Remove the bindmount we were using to keep a reference to
-     * the previously obscured directory.
-     */
+        /*
+         * Remove the bindmount we were using to keep a reference to
+         * the previously obscured directory.
+         */
 
-    if (doUnmount(Volume::SEC_ASECDIR, force)) {
-        SLOGE("Failed to remove bindmount on %s (%s)", SEC_ASECDIR, strerror(errno));
-        goto fail_remount_tmpfs;
+        if (doUnmount(Volume::SEC_ASECDIR, force)) {
+            SLOGE("Failed to remove bindmount on %s (%s)", SEC_ASECDIR, strerror(errno));
+            goto fail_remount_tmpfs;
+        }
     }
 
     /*
