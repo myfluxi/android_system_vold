@@ -13,6 +13,7 @@ common_src_files := \
 	Process.cpp \
 	Fat.cpp \
 	Ntfs.cpp \
+	Exfat.cpp \
 	Loop.cpp \
 	Devmapper.cpp \
 	ResponseCode.cpp \
