@@ -49,6 +49,7 @@ public:
 protected:
     char *mLabel;
     char *mMountpoint;
+    int mSharelun[4];
     VolumeManager *mVm;
     bool mDebug;
     int mPartIdx;
@@ -67,6 +68,8 @@ public:
     int mountVol();
     int unmountVol(bool force, bool revert);
     int formatVol();
+    int shareVol(int lun);
+    int unshareVol();
 
     const char *getLabel() { return mLabel; }
     const char *getMountpoint() { return mMountpoint; }

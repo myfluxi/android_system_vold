@@ -751,6 +751,127 @@ out_nomedia:
     setState(Volume::State_NoMedia);
     return -1;
 }
+
+int Volume::shareVol(int lun) {
+	int n = 0, i = 0, share = 0;
+	dev_t deviceNodes[4];
+
+	SLOGW("Volume::shareVol, lun=%d", lun);
+
+	n = getDeviceNodes(deviceNodes, 4);
+
+	for( i=0; i< n; i++ ) {
+		dev_t d = deviceNodes[i];
+		mSharelun[i] = lun + i;
+
+		if ((MAJOR(d) == 0) && (MINOR(d) == 0)) {
+		    // This volume does not support raw disk access
+		    errno = EINVAL;
+		    return 0;
+		}
+
+		int fd = -1;
+		char nodepath[255];
+		char umslun[255];
+
+		memset(nodepath, 0, 255);
+		memset(umslun, 0, 255);
+
+		snprintf(nodepath,
+				 sizeof(nodepath), "/dev/block/vold/%d:%d",
+				 MAJOR(d), MINOR(d));
+
+		if(mSharelun[i] == 0)
+			snprintf(umslun, sizeof(umslun), "/sys/class/android_usb/android0/f_mass_storage/lun/file");
+		else
+			snprintf(umslun, sizeof(umslun), "/sys/class/android_usb/android0/f_mass_storage/lun%d/file", mSharelun[i]);
+
+		SLOGI("shareVol: %s; umslun: %s", nodepath, umslun);
+
+		if ((fd = open(umslun,O_WRONLY)) < 0) {
+		    SLOGE("Unable to open ums lunfile (%s)", strerror(errno));
+		    return 0;
+		}
+
+		if (write(fd, nodepath, strlen(nodepath)) < 0) {
+		    SLOGE("Unable to write to ums lunfile (%s)", strerror(errno));
+		    close(fd);
+		    return 0;
+		}
+
+		close(fd);
+
+		handleVolumeShared();
+
+		share++;
+	}
+
+	SLOGI("shareVol: share = %d\n", share);
+
+    return share;
+}
+
+int Volume::unshareVol() {
+	int i,n;
+	dev_t deviceNodes[4];
+
+	SLOGW("Volume::unshareVol");
+
+	n = getDeviceNodes(deviceNodes, 4);
+
+	for( i=0; i< n; i++) {
+		int fd;
+		char umslun[255];
+
+		memset(umslun, 0, 255);
+
+		if(mSharelun[i] == 0)
+			snprintf(umslun, sizeof(umslun), "/sys/class/android_usb/android0/f_mass_storage/lun/file");
+		else
+			snprintf(umslun, sizeof(umslun), "/sys/class/android_usb/android0/f_mass_storage/lun%d/file", mSharelun[i]);
+
+		SLOGI("unshareVol: umslun '%s'", umslun);
+
+		if ((fd = open(umslun, O_WRONLY)) < 0) {
+	        SLOGE("Unable to open ums lunfile (%s), (%s)", umslun, strerror(errno));
+	        return 0;
+	    }
+
+    	char ch = 0;
+#if 1
+		int wait_i = 0;
+
+		while(wait_i < 30){
+			if (write(fd, &ch, 1) >= 0) {
+				break;
+			}
+
+			SLOGE("---wait :%d %d \n", wait_i);
+			wait_i++;
+			usleep(100);
+		}
+
+		if(wait_i == 30){
+			SLOGE("Unable to write to ums lunfile (%s)", strerror(errno));
+			close(fd);
+			return 0;
+		}
+#else
+		if (write(fd, &ch, 1) < 0) {
+			SLOGE("Unable to write to ums lunfile (%s)", strerror(errno));
+			close(fd);
+			return -1;
+		}
+#endif
+
+		close(fd);
+
+		handleVolumeUnshared();
+	}
+
+    return n;
+}
+
 int Volume::initializeMbr(const char *deviceNode) {
     struct disk_info dinfo;
 

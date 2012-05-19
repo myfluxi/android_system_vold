@@ -60,6 +60,7 @@ VolumeManager::VolumeManager() {
     mUmsSharingCount = 0;
     mSavedDirtyRatio = -1;
     mVolManagerDisabled = 0;
+    mlun =0;
 
     // set dirty ratio to ro.vold.umsdirtyratio (default 0) when UMS is active
     char dirtyratio[PROPERTY_VALUE_MAX];
@@ -919,6 +920,7 @@ int VolumeManager::shareEnabled(const char *label, const char *method, bool *ena
     return 0;
 }
 
+#if 0
 static const char *LUN_FILES[] = {
 #ifdef CUSTOM_LUN_FILE
     CUSTOM_LUN_FILE,
@@ -948,9 +950,11 @@ int VolumeManager::openLun(int number) {
     SLOGE("Unable to find ums lunfile for LUN %d", number);
     return -1;
 }
+#endif
 
 int VolumeManager::shareVolume(const char *label, const char *method) {
     Volume *v = lookupVolume(label);
+    int part = 0;
 
     if (!v) {
         errno = ENOENT;
@@ -989,7 +993,7 @@ int VolumeManager::shareVolume(const char *label, const char *method) {
         errno = EINVAL;
         return -1;
     }
-
+#if 0
 #ifdef VOLD_EMMC_SHARES_DEV_MAJOR
     // If emmc and sdcard share dev major number, vold may pick
     // incorrectly based on partition nodes alone. Use device nodes instead.
@@ -1027,6 +1031,11 @@ int VolumeManager::shareVolume(const char *label, const char *method) {
 
     close(fd);
     v->handleVolumeShared();
+#endif
+    part=v->shareVol(mlun);
+    mlun += part;
+    SLOGI("shareVolume: mlun = %d", mlun);
+
     if (mUmsSharingCount++ == 0) {
         FILE* fp;
         mSavedDirtyRatio = -1; // in case we fail
@@ -1047,6 +1056,7 @@ int VolumeManager::shareVolume(const char *label, const char *method) {
 
 int VolumeManager::unshareVolume(const char *label, const char *method) {
     Volume *v = lookupVolume(label);
+    int part = 0;
 
     if (!v) {
         errno = ENOENT;
@@ -1062,7 +1072,7 @@ int VolumeManager::unshareVolume(const char *label, const char *method) {
         errno = EINVAL;
         return -1;
     }
-
+#if 0
     int fd;
     int lun_number;
 
@@ -1086,6 +1096,11 @@ int VolumeManager::unshareVolume(const char *label, const char *method) {
 
     close(fd);
     v->handleVolumeUnshared();
+#endif
+    part=v->unshareVol();
+    mlun -= part;
+    SLOGI("unshareVolume: lun = %d", mlun);
+
     if (--mUmsSharingCount == 0 && mSavedDirtyRatio != -1) {
         FILE* fp;
         if ((fp = fopen("/proc/sys/vm/dirty_ratio", "r+"))) {
