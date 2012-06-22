@@ -73,7 +73,6 @@ private:
     int                    mUmsSharingCount;
     int                    mSavedDirtyRatio;
     int                    mUmsDirtyRatio;
-    int                    mlun;
     int                    mVolManagerDisabled;
 
 public:
