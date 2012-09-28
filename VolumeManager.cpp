@@ -49,7 +49,7 @@
 #include "Asec.h"
 #include "cryptfs.h"
 
-#define MASS_STORAGE_FILE_PATH  "/sys/class/android_usb/android0/f_mass_storage/lun/file"
+#define MASS_STORAGE_FILE_PATH  "/sys/class/android_usb/android0/f_mass_storage/lun0/file"
 
 VolumeManager *VolumeManager::sInstance = NULL;
 
