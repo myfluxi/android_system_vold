@@ -69,11 +69,15 @@ VolumeManager::VolumeManager() {
     // set dirty ratio to 0 when UMS is active
     mUmsDirtyRatio = 0;
     mVolManagerDisabled = 0;
+    mUms = new UmsCollection();
+    mUsbMdmMgr = new UsbMdmMgr();
 }
 
 VolumeManager::~VolumeManager() {
     delete mVolumes;
     delete mActiveContainers;
+    delete mUms;
+    delete mUsbMdmMgr;
 }
 
 char *VolumeManager::asecHash(const char *id, char *buffer, size_t len) {
@@ -127,6 +131,58 @@ int VolumeManager::stop() {
 int VolumeManager::addVolume(Volume *v) {
     mVolumes->push_back(v);
     return 0;
+}
+
+void VolumeManager::handleUsbEvent(NetlinkEvent *evt) {
+    const char *devpath = evt->findParam("DEVPATH");
+    const char *devtype = evt->findParam("DEVTYPE");
+    const char *productStr = evt->findParam("PRODUCT");
+    const char *interfaceStr = evt->findParam("INTERFACE");
+    
+    int vid = 0 ;
+    int pid = 0;
+    int ret = -1 ;
+
+    //we just judge the usb interface as a ums device
+    if (!devtype || !productStr || !interfaceStr)
+        return;
+
+    if (strcmp(devtype, "usb_interface"))
+        return;
+
+    //if it is mass storage interface
+    if (interfaceStr[0] == UmsDevice::MASS_STORAGE_CLASS_ID) {
+        sscanf(productStr, "%x/%x/", &vid, &pid);
+        if (NetlinkEvent::NlActionAdd == evt->getAction()) {
+            if(0 <= (ret=mUsbMdmMgr->switchMode(vid,pid,devpath))){
+                return ;
+            }
+            
+            UmsDevice *ums = NULL;
+            ums = new UmsDevice(devpath);
+            mUms->push_back(ums);
+        } else if (NetlinkEvent::NlActionRemove == evt->getAction()) {
+            mUsbMdmMgr->delMdmDev(vid, pid);
+            
+            UmsCollection::iterator iter;
+            //find out the ums device and delete it
+            for (iter = mUms->begin(); iter != mUms->end(); ++iter) {
+                if ((*iter)->isUmsDevPath(devpath)) {
+                    mUms->erase(iter);
+                    break;
+                }
+            }
+        }
+    }
+    else if (interfaceStr != NULL ) {
+        sscanf(productStr, "%x/%x/", &vid, &pid);
+
+        if (NetlinkEvent::NlActionAdd == evt->getAction()) {
+            mUsbMdmMgr->addMdmDev(vid, pid);
+        } else if (NetlinkEvent::NlActionRemove == evt->getAction()) {
+            mUsbMdmMgr->delMdmDev(vid, pid);
+        }
+    }
 }
 
 void VolumeManager::handleBlockEvent(NetlinkEvent *evt) {

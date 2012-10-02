@@ -24,6 +24,8 @@
 #include <sysutils/SocketListener.h>
 
 #include "Volume.h"
+#include "Ums.h"
+#include "UsbMdmMgr.h"
 
 /* The length of an MD5 hash when encoded into ASCII hex characters */
 #define MD5_ASCII_LENGTH_PLUS_NULL ((MD5_DIGEST_LENGTH*2)+1)
@@ -66,6 +68,9 @@ private:
     int                    mSavedDirtyRatio;
     int                    mUmsDirtyRatio;
     int                    mVolManagerDisabled;
+    
+    UmsCollection         *mUms;
+    UsbMdmMgr             *mUsbMdmMgr;
 
 public:
     virtual ~VolumeManager();
@@ -73,6 +78,7 @@ public:
     int start();
     int stop();
 
+    void handleUsbEvent(NetlinkEvent *evt);
     void handleBlockEvent(NetlinkEvent *evt);
 
     int addVolume(Volume *v);
