@@ -22,6 +22,14 @@
 class NetlinkEvent;
 class VolumeManager;
 
+enum eVolumeType {
+    VOLUME_TYPE_UNKNOWN,
+    VOLUME_TYPE_SDCARD,
+    VOLUME_TYPE_FLASH,
+    VOLUME_TYPE_UMS,
+    VOLUME_TYPE_SATA,
+};
+
 class Volume {
 private:
     int mState;

@@ -78,6 +78,7 @@ int main() {
         exit(1);
     }
 
+    coldboot("/sys/devices");
     coldboot("/sys/block");
 //    coldboot("/sys/class/switch");
 
