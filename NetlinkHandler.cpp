@@ -53,5 +53,7 @@ void NetlinkHandler::onEvent(NetlinkEvent *evt) {
 
     if (!strcmp(subsys, "block")) {
         vm->handleBlockEvent(evt);
+    } else if (!strcmp(subsys, "usb")) {
+        vm->handleUsbEvent(evt);
     }
 }

@@ -19,7 +19,10 @@ common_src_files := \
 	Devmapper.cpp \
 	ResponseCode.cpp \
 	Xwarp.cpp \
-	cryptfs.c
+	cryptfs.c \
+	Ums.cpp \
+	UsbMdmMgr.cpp \
+	UsbModem.cpp
 
 common_c_includes := \
 	$(KERNEL_HEADERS) \
